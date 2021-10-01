@@ -59,6 +59,9 @@ class Parser extends HtmlParser
     public function getOptions(): array
     {
         $options = [];
+        if (! $this->exists( '[itemprop="offers"]' )) {
+            return $options;
+        }
         $offers = $this->filter( '[itemprop="offers"]' )->html();
 
         foreach (explode( '<br>', $offers ) as $o) {

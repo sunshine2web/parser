@@ -3,28 +3,19 @@
 namespace App\Feeds\Vendors\TAS;
 
 use App\Feeds\Feed\FeedItem;
-use App\Feeds\Processor\HttpProcessor;
-use App\Feeds\Utils\Data;
+use App\Feeds\Processor\SitemapHttpProcessor;
 use App\Feeds\Utils\Link;
-use App\Feeds\Utils\ParserCrawler;
 
-class Vendor extends HttpProcessor
+class Vendor extends SitemapHttpProcessor
 {
-    protected array $first = [ 'https://www.tashaapparel.com/Wholesale-New-Dresses-s/398.htm' ];
-
-    public function getCategoriesLinks( Data $data, string $url ): array
+    protected array $first = [ 'https://www.tashaapparel.com/sitemap.xml' ];
+    
+    public function filterProductLinks( Link $link ): bool
     {
-        $links = [];
-        $links[] = "https://www.tashaapparel.com/Wholesale-New-Dresses-s/398.htm?searching=Y&sort=3&cat=398&show=360&page=1";
-        return array_merge($links, parent::getCategoriesLinks($data, $url) );
-    }
-
-    public function getProductsLinks( Data $data, string $url ): array
-    {
-        return array_merge(
-            [
-                'https://www.tashaapparel.com/Junior-Plus-Navy-Multi-Paisley-Print-Tunic-Top-p/wpw10156a-navy-multi.htm'
-            ], parent::getProductsLinks($data, $url) );
+        $isValid = stripos( $link->getUrl(), '/articles.asp') === false
+            && stripos( $link->getUrl(), '/help_answer.asp') === false
+            && str_ends_with($link->getUrl(), '.htm');
+        return $isValid;
     }
 
     protected function isValidFeedItem( FeedItem $fi ): bool
