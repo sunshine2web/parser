@@ -20,11 +20,7 @@ class Parser extends HtmlParser
 
     public function getListPrice(): ?float
     {
-        if ( $this->exists( '.product_productprice' ) ) {
-            return $this->getMoney( '.product_productprice' );
-        }
-
-        return StringHelper::getMoney( $this->getAttr( 'meta[ itemprop="price"]', 'content' ) );
+        return $this->getMoney( '.product_productprice' ) ?: StringHelper::getMoney( $this->getAttr( 'meta[ itemprop="price"]', 'content' ) );
     }
 
     public function getCostToUs(): float
@@ -34,11 +30,7 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $description = trim( $this->getText( '[itemprop="description"]' ) );
-        if ( $description === '' ) {
-            $description = trim( $this->getText( '#details [style="font-size: 12pt; font-family: Arial;"]' ) );
-        }
-        return $description;
+        return trim( $this->getText( '[itemprop="description"]' ) ) ?: trim( $this->getText( '#details [style="font-size: 12pt; font-family: Arial;"]' ) );
     }
 
     public function getImages(): array
@@ -48,21 +40,18 @@ class Parser extends HtmlParser
 
     public function getAvail(): ?int
     {
-        $html = $this->html();
-        preg_match("/Quantity.in.Stock:(\d+)</im", $html, $matches);
-        if (isset($matches[1])) {
-            return $matches[1];
-        }
-        return self::DEFAULT_AVAIL_NUMBER;
+        preg_match("/Quantity.in.Stock:(\d+)</im", $this->node->html(), $matches);
+        return $matches[1] ?? self::DEFAULT_AVAIL_NUMBER;
     }
 
-    public function getOptions(): array
+    public function getAttributes(): array
     {
-        $options = [];
+        $attributes = [];
         if (! $this->exists( '[itemprop="offers"]' )) {
-            return $options;
+            return $attributes;
         }
         $offers = $this->filter( '[itemprop="offers"]' )->html();
+        $valid_names = ['Made In', 'Fabric', 'Color', 'Size Ratio', 'Package']; 
 
         foreach (explode( '<br>', $offers ) as $o) {
             $item = trim($o);
@@ -70,12 +59,38 @@ class Parser extends HtmlParser
             if (isset($matches[2])) {
                 $name = trim($matches[1]);
                 $v = trim($matches[2]);
-                $validNames = ['Made In', 'Fabric', 'Color', 'Size Ratio', 'Package']; 
-                if (in_array($name, $validNames)) {
-                    $options[ $name ][] = $v;
+                if (in_array($name, $valid_names)) {
+                    $attributes[ $name ] = $v;
                 }
             }
         }
+        return $attributes;
+    }
+
+    public function getOptions(): array
+    {
+        $options = [];
+        if (!$this->exists( 'table#options_table' )) 
+        {
+            return $options;
+        }
+        
+        $table = $this->filter( 'table#options_table' )->first();
+        $name = trim($table->text());
+        if (stripos($name, 'size*') !== false && count($table->filter('select'))) {
+            $name = 'Size';
+            $select_name = $table->filter('select')->attr('name');
+            $html = $this->html();
+            preg_match("/makeComboGroup\(\"" . $select_name .  "(.*?)TCN_reload/is", $html, $matches);
+            if (isset($matches[1])) {
+                foreach( explode("\n", $matches[1]) as $line ) {
+                    preg_match("/TCN_addContent\(\"(.*?)\+/i", $line, $line_matches);
+                    if (isset($line_matches[1])) {
+                        $options[ $name ][] = $line_matches[1];
+                    }
+                }
+            }
+        }    
         return $options;
     }
 }
