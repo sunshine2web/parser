@@ -30,7 +30,12 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        return trim( $this->getText( '[itemprop="description"]' ) ) ?: trim( $this->getText( '#details [style="font-size: 12pt; font-family: Arial;"]' ) );
+        $d = trim( $this->getText( '[itemprop="description"]' ) ) ?: trim( $this->getText( '#details [style="font-size: 12pt; font-family: Arial;"]' ) );
+        if ($this->exists( '#ProductDetail_ProductDetails_div2' )) {
+            $d .= ' ';
+            $d .= StringHelper::normalizeJsonString($this->getText('#ProductDetail_ProductDetails_div2'));
+        }
+        return $d;
     }
 
     public function getImages(): array
