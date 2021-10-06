@@ -30,10 +30,11 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $d = trim( $this->getText( '[itemprop="description"]' ) ) ?: trim( $this->getText( '#details [style="font-size: 12pt; font-family: Arial;"]' ) );
-        if ($this->exists( '#ProductDetail_ProductDetails_div2' )) {
-            $d .= ' ';
-            $d .= StringHelper::normalizeJsonString($this->getText('#ProductDetail_ProductDetails_div2'));
+        $d = trim( $this->getHtml( '[itemprop="description"]' ) ) ?: trim( $this->getHtml( '#ProductDetail_ProductDetails_div' ) );
+        $div2 = '#ProductDetail_ProductDetails_div2 table table td';
+        if ($this->exists( $div2 )) {
+            $d .= '<br />';
+            $d .= $this->getHtml($div2);
         }
         return $d;
     }
@@ -75,27 +76,19 @@ class Parser extends HtmlParser
     public function getOptions(): array
     {
         $options = [];
-        if (!$this->exists( 'table#options_table' )) 
-        {
-            return $options;
-        }
         
-        $table = $this->filter( 'table#options_table' )->first();
-        $name = trim($table->text());
-        if (stripos($name, 'size*') !== false && count($table->filter('select'))) {
-            $name = 'Size';
-            $select_name = $table->filter('select')->attr('name');
-            $html = $this->html();
-            preg_match("/makeComboGroup\(\"" . $select_name .  "(.*?)TCN_reload/is", $html, $matches);
-            if (isset($matches[1])) {
-                foreach( explode("\n", $matches[1]) as $line ) {
-                    preg_match("/TCN_addContent\(\"(.*?)\+/i", $line, $line_matches);
-                    if (isset($line_matches[1])) {
-                        $options[ $name ][] = $line_matches[1];
-                    }
+        $this->filter( '#options_table select' )->each( function ( ParserCrawler $node ) use ( &$options ) {
+            $name_option = '';
+            foreach( $node->getContent( 'option' ) as $option ) {
+                if ( stripos( $option, 'select' ) !== false ) {
+                    $name_option = StringHelper::normalizeSpaceInString( str_ireplace( 'select', '', $option ) );
+                    break;
                 }
             }
-        }    
+            preg_match('/makeComboGroup\("' . $node->attr( 'name' )  .  '.*?TCN_reload/s', $this->node->html(), $matches);
+            preg_match_all('/TCN_addContent\(\"(.*?)\+/i', $matches[0], $matches);
+            $options[ $name_option ] = $matches[1];
+        });
         return $options;
     }
 }
