@@ -30,13 +30,11 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $d = trim( $this->getHtml( '[itemprop="description"]' ) ) ?: trim( $this->getHtml( '#ProductDetail_ProductDetails_div' ) );
-        $div2 = '#ProductDetail_ProductDetails_div2 table table td';
-        if ($this->exists( $div2 )) {
-            $d .= '<br />';
-            $d .= $this->getHtml($div2);
+        $d = trim( $this->getHtml( '[itemprop="description"]' ) ) ?: trim( $this->getHtml( '#product_description' ) );
+        if ( $this->exists( '#ProductDetail_ProductDetails_div2' ) ) {
+            $d .= '<br />' . StringHelper::removeSpaces( $this->getHtml( '#ProductDetail_ProductDetails_div2 table table td' ) );
         }
-        return $d;
+        return StringHelper::isNotEmpty($d) ? trim($d) : $this->getProduct();
     }
 
     public function getImages(): array
