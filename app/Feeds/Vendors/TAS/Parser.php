@@ -45,14 +45,17 @@ class Parser extends HtmlParser
     public function getAvail(): ?int
     {
         preg_match("/Quantity.in.Stock:(\d+)</im", $this->node->html(), $matches);
+        if ( !isset($matches[1]) ) {
+            return stripos( $this->getAttr( 'meta[ itemprop="availability"]', 'content' ), 'InStock' ) ? self::DEFAULT_AVAIL_NUMBER : 0;
+        }
         return $matches[1] ?? self::DEFAULT_AVAIL_NUMBER;
     }
 
-    public function getAttributes(): array
+    public function getAttributes(): ?array
     {
         $attributes = [];
         if (! $this->exists( '[itemprop="offers"]' )) {
-            return $attributes;
+            return null;
         }
         $offers = $this->filter( '[itemprop="offers"]' )->html();
         $valid_names = ['Made In', 'Fabric', 'Color', 'Size Ratio', 'Package']; 
@@ -68,7 +71,8 @@ class Parser extends HtmlParser
                 }
             }
         }
-        return $attributes;
+        
+        return empty($attributes) ? null : $attributes;
     }
 
     public function getOptions(): array
@@ -85,7 +89,9 @@ class Parser extends HtmlParser
             }
             preg_match('/makeComboGroup\("' . $node->attr( 'name' )  .  '.*?TCN_reload/s', $this->node->html(), $matches);
             preg_match_all('/TCN_addContent\(\"(.*?)\+/i', $matches[0], $matches);
-            $options[ $name_option ] = $matches[1];
+            if (!empty($matches[1])) {
+                $options[ $name_option ] = $matches[1];
+            }
         });
         return $options;
     }
