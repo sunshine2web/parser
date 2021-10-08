@@ -35,7 +35,13 @@ class Parser extends HtmlParser
     {
         $d = trim( $this->getHtml( '[itemprop="description"]' ) ) ?: trim( $this->getHtml( '#product_description' ) );
         if ( $this->exists( '#ProductDetail_ProductDetails_div2' ) ) {
-            $d .= "<br>" . StringHelper::removeSpaces( $this->getHtml( '#ProductDetail_ProductDetails_div2 table table td' ) );
+            $extra_details = '';
+            $this->filter( '#ProductDetail_ProductDetails_div2 table table td table tr' )->each( function ( ParserCrawler $node ) use ( &$extra_details ) {
+                if ( stripos( $node->text(), 'Questions about fit' ) === false ) {
+                    $extra_details .= StringHelper::removeSpaces( $node->html() );         
+                }
+            });
+            $d .= "<br>" . $extra_details;
         }
         return StringHelper::isNotEmpty( $d ) ? trim( $d ) : $this->getProduct();
     }
