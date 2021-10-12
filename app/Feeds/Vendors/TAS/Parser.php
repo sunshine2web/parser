@@ -33,17 +33,26 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $d = trim( $this->getHtml( '[itemprop="description"]' ) ) ?: trim( $this->getHtml( '#product_description' ) );
-        if ( $this->exists( '#ProductDetail_ProductDetails_div2' ) ) {
-            $extra_details = '';
-            $this->filter( '#ProductDetail_ProductDetails_div2 table table td table tr' )->each( function ( ParserCrawler $node ) use ( &$extra_details ) {
+        $d = $this->_extractDescription( '#product_description' );
+        if ( empty( $d ) ) {
+            $d = $this->_extractDescription( '#ProductDetail_ProductDetails_div table tr' );
+        }
+        $d .= $this->_extractDescription( '#ProductDetail_ProductDetails_div2 table tr td table tr td' );
+        return StringHelper::isNotEmpty( $d ) ? trim( $d ) : $this->getProduct();
+    }
+
+    private function _extractDescription( $selector ): string 
+    {
+        $result = '';
+        if ( $this->exists( $selector ) ) {
+            $this->filter( $selector )->each( function ( ParserCrawler $node ) use ( &$result ) {
                 if ( stripos( $node->text(), 'Questions about fit' ) === false ) {
-                    $extra_details .= StringHelper::removeSpaces( $node->html() );         
+                    $result .= empty( $result ) ? '' : '<br>';
+                    $result .= $node->text();    
                 }
             });
-            $d .= "<br>" . $extra_details;
         }
-        return StringHelper::isNotEmpty( $d ) ? trim( $d ) : $this->getProduct();
+        return $result;
     }
 
     public function getImages(): array
