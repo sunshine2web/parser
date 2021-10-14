@@ -33,7 +33,7 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $d = $this->_extractDescription( '#ProductDetail_ProductDetails_div table tr' );
+        $d = $this->_extractDescription( '#ProductDetail_ProductDetails_div table' );
         if ( empty( $d ) ) {
             $d = $this->_extractDescription( '#product_description' );
         }
@@ -45,16 +45,14 @@ class Parser extends HtmlParser
     {
         $result = '';
         if ( $this->exists( $selector ) ) {
-            $this->filter( $selector )->each( function ( ParserCrawler $node ) use ( &$result ) {
-                if ( stripos( $node->text(), 'Questions about fit' ) === false ) {
-                    $result .= empty( $result ) ? '' : '<br>';
-                    $h = $node->html();
-                    $h = str_replace("</li>", "\r", $h);
-                    $h = str_replace("<ul>", "\r", $h);
-                    $h = strip_tags( $h );
-                    $result .= str_replace("\r", "<br>", $h);
-                }
-            });
+            $result = $this->filter( $selector )->html();
+
+            $re = [ '/Item Measurements:(.*?)<br/im', '/>Item(.*?)Measurements:(.*?)<\//im', '/Item(.*?)Measurements(.*?)<br/im' ];
+            foreach ( $re as $r ) {
+                $result = preg_replace( $r, '', $result );
+            }
+            $result = preg_replace( "/Questions about fit(.*?)<\/a>/im", '', $result );
+            
         }
         if ($result != '' && $add_line_break) {
             $result = '<br>' . $result;
@@ -62,7 +60,7 @@ class Parser extends HtmlParser
         return $result;
     }
 
-    private function _extractItemMeasurements($selector ): string 
+    private function _extractItemMeasurements( $selector ): array 
     {
         $result = '';
         if ( $this->exists( $selector ) ) {
@@ -79,8 +77,16 @@ class Parser extends HtmlParser
             });
 
         }
+        $attributes = [];
+        preg_match_all( "/(.*?):(.*?)\"/i", $result, $matches );
+        if ( count( $matches ) == 3 && count( $matches[1] ) > 0 ) {
+            for ( $i = 0; $i < count( $matches[1] ); $i++ ) {
+                $name = trim ( str_replace(",", "", $matches[1][$i] ) );
+                $attributes[ $name ] = trim( $matches[2][$i] ) . '"';
+            }
+        }
 
-        return $result;
+        return $attributes;
     }
 
     public function getImages(): array
@@ -121,8 +127,8 @@ class Parser extends HtmlParser
         $item_measurements_selectors = [ '#ProductDetail_ProductDetails_div2 table tr td table tr td', '#ProductDetail_ProductDetails_div table tr', '#product_description' ];
         foreach ( $item_measurements_selectors as $s) {
             $item_measurements = $this->_extractItemMeasurements( $s );
-            if ( $item_measurements != '' ) {
-                $attributes[ 'Item Measurements' ] = $item_measurements;
+            if ( count( $item_measurements ) ) {
+                $attributes = array_merge( $attributes, $item_measurements);
                 break;
             }     
         }
