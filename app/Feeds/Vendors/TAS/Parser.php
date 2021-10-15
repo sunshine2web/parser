@@ -33,25 +33,24 @@ class Parser extends HtmlParser
 
     public function getDescription(): string
     {
-        $d = $this->_extractDescription( '#ProductDetail_ProductDetails_div table' );
+        $d = $this->extractDescription( '#ProductDetail_ProductDetails_div table' );
         if ( empty( $d ) ) {
-            $d = $this->_extractDescription( '#product_description' );
+            $d = $this->extractDescription( '#product_description' );
         }
-        $d .= $this->_extractDescription( '#ProductDetail_ProductDetails_div2 table tr td table tr td', true );
+        $d .= $this->extractDescription( '#ProductDetail_ProductDetails_div2 table tr td table tr td', true );
         return StringHelper::isNotEmpty( $d ) ? trim( $d ) : $this->getProduct();
     }
 
-    private function _extractDescription( $selector, $add_line_break = false ): string 
+    private function extractDescription( $selector, $add_line_break = false ): string 
     {
         $result = '';
         if ( $this->exists( $selector ) ) {
-            $result = $this->filter( $selector )->html();
-
-            $re = [ '/Item Measurements:(.*?)<br/im', '/>Item(.*?)Measurements:(.*?)<\//im', '/Item(.*?)Measurements(.*?)<br/im' ];
-            foreach ( $re as $r ) {
-                $result = preg_replace( $r, '', $result );
-            }
-            $result = preg_replace( "/Questions about fit(.*?)<\/a>/im", '', $result );
+            $result = strip_tags( $this->filter( $selector )->outerHtml(), [ 'p', 'li', 'ul', 'br' ] );
+            $result = StringHelper::cutTagsAttributes($result);
+            $result = preg_replace( '/🖤 Item(.*?)Measurements:(.*?)</im', '<', $result );
+            $result = preg_replace( '/Item(.*?)Measurements:(.*?)</im', '<', $result );
+            $result = preg_replace( '/❓Questions about fit?(.*?)tashaapparel.com/im', '', $result );
+            $result = preg_replace( '/Questions about fit(.*?)tashaapparel.com/im', '', $result );
             
         }
         if ($result != '' && $add_line_break) {
@@ -60,7 +59,7 @@ class Parser extends HtmlParser
         return $result;
     }
 
-    private function _extractItemMeasurements( $selector ): array 
+    private function extractItemMeasurements( $selector ): array 
     {
         $result = '';
         if ( $this->exists( $selector ) ) {
@@ -126,7 +125,7 @@ class Parser extends HtmlParser
 
         $item_measurements_selectors = [ '#ProductDetail_ProductDetails_div2 table tr td table tr td', '#ProductDetail_ProductDetails_div table tr', '#product_description' ];
         foreach ( $item_measurements_selectors as $s) {
-            $item_measurements = $this->_extractItemMeasurements( $s );
+            $item_measurements = $this->extractItemMeasurements( $s );
             if ( count( $item_measurements ) ) {
                 $attributes = array_merge( $attributes, $item_measurements);
                 break;
