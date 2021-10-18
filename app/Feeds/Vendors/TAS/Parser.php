@@ -47,13 +47,13 @@ class Parser extends HtmlParser
         if ( $this->exists( $selector ) ) {
             $result = strip_tags( $this->filter( $selector )->outerHtml(), [ 'p', 'li', 'ul', 'br' ] );
             $result = StringHelper::cutTagsAttributes($result);
-            $result = preg_replace( '/🖤 Item(.*?)Measurements:(.*?)</im', '<', $result );
+            $result = preg_replace( '/🖤 \s*Item(.*?)Measurements:(.*?)</uim', '<', $result );
             $result = preg_replace( '/Item(.*?)Measurements:(.*?)</im', '<', $result );
             $result = preg_replace( '/❓Questions about fit?(.*?)tashaapparel.com/im', '', $result );
             $result = preg_replace( '/Questions about fit(.*?)tashaapparel.com/im', '', $result );
             
         }
-        if ($result != '' && $add_line_break) {
+        if ($result !== '' && $add_line_break) {
             $result = '<br>' . $result;
         }
         return $result;
@@ -64,10 +64,11 @@ class Parser extends HtmlParser
         $result = '';
         if ( $this->exists( $selector ) ) {
             $this->filter( $selector )->each( function ( ParserCrawler $node ) use ( &$result ) {
-                $re = ["/Measurements:(.*?)<br/im", "/Measurements:(.*?)<\//im"];
+                $str = strip_tags( $node->html(), [ 'p', 'li', 'ul', 'br' ] );
+                $re = ["/Item.Measurements:(.*?)<br/im", "/Item.Measurements:(.*?)<\//im"];
                 foreach ( $re as $r ) {
                     if ( empty( $result ) ) {
-                        preg_match( $r, $node->html(), $matches );
+                        preg_match( $r, $str, $matches );
                         if ( isset( $matches[1] ) ) {
                             $result = trim( strip_tags( $matches[1] ) );
                         }        
@@ -77,9 +78,10 @@ class Parser extends HtmlParser
 
         }
         $attributes = [];
-        preg_match_all( "/(.*?):(.*?)\"/i", $result, $matches );
-        if ( count( $matches ) == 3 && count( $matches[1] ) > 0 ) {
-            for ( $i = 0; $i < count( $matches[1] ); $i++ ) {
+        preg_match_all( "/(.*?):\s*(\d+)(.*?)(,|$)/i", $result, $matches );
+        if ( count( $matches ) === 5 && count( $matches[1] ) > 0 ) {
+            $len = count( $matches[1] );
+            for ( $i = 0; $i < $len; $i++ ) {
                 $name = trim ( str_replace(",", "", $matches[1][$i] ) );
                 $attributes[ $name ] = trim( $matches[2][$i] ) . '"';
             }
