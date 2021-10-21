@@ -10,20 +10,62 @@ use App\Helpers\StringHelper;
 class Parser extends HtmlParser
 {
     private bool $extra_product = false;
+    private string $desc = '';
+    private array $attributes = [];
+
+    private function pushAttributes(): void
+    {
+        preg_match_all( '/<b>.*?<br>/', $this->getHtml( '[itemprop="offers"]' ), $matches );
+
+        foreach ( $matches[ 0 ] as $match ) {
+            [ $key, $value ] = array_map( static fn( $el ) => StringHelper::trim( strip_tags( $el ) ), explode( ':', $match ) );
+            $this->attributes[ $key ] = $value;
+        }
+    }
+
+    private function pushDescAndAttributes(): void
+    {
+        $this->desc = $this->getHtml( '#ProductDetail_ProductDetails_div' );
+        $this->desc .= '<br>' . $this->getHtml( '#ProductDetail_ProductDetails_div2' );
+        $this->desc = strip_tags( $this->desc, [ 'p', 'li', 'ul', 'br', 'div' ] );
+
+        //search measurements attributes in desc
+        if ( preg_match( '/(🖤*\s*item measurements:(.*?))<(\/)*.*?>/ui', $this->desc, $matches ) && str_contains( $matches[ 2 ], ':' ) ) {
+            $this->desc = str_ireplace( $matches[ 1 ], '', $this->desc );
+
+            //if it found, do explode on attributes in measurements value
+            //example: item measurements: Attr1: Value1, Attr2: Value2 ...
+            preg_match_all( '/,*(.*?:\s*(\d*[.\d+]*)"*)/', $matches[ 2 ], $matches );
+            foreach ( $matches[ 1 ] as $match ) {
+                [ $key, $value ] = array_map( static fn( $el ) => StringHelper::trim( $el ), explode( ':', $match ) );
+                $this->attributes[ $key ] = $value;
+            }
+        }
+
+        $this->desc = preg_replace( '/<br>\s*<br>/', '<br>', $this->replaceInvalidPartsFromDesc( $this->desc ) );
+    }
+
+    private function replaceInvalidPartsFromDesc( string $desc ): string
+    {
+        $invalid_parts = [
+            '/email: info@tashaapparel\.co(m)*/i',
+            '/Questions about fit❓/iu',
+            '/❓Questions about fit/iu',
+            '/Please follow our social media\./i',
+        ];
+
+        return preg_replace( $invalid_parts, '', $desc );
+    }
+
+    public function beforeParse(): void
+    {
+        $this->pushDescAndAttributes();
+        $this->pushAttributes();
+    }
 
     public function getMpn(): string
     {
         return $this->getText( '.product_code' );
-    }
-
-    public function getProduct(): string
-    {
-        return trim( $this->getAttr( 'meta[property="og:title"]', 'content' ) );
-    }
-
-    public function getListPrice(): ?float
-    {
-        return $this->getMoney( '.product_productprice' ) ?: StringHelper::getMoney( $this->getAttr( 'meta[ itemprop="price"]', 'content' ) );
     }
 
     public function getCostToUs(): float
@@ -31,63 +73,19 @@ class Parser extends HtmlParser
         return $this->getListPrice();
     }
 
+    public function getListPrice(): ?float
+    {
+        return $this->getMoney( '.product_productprice' ) ?: StringHelper::getMoney( $this->getAttr( 'meta[ itemprop="price"]', 'content' ) );
+    }
+
     public function getDescription(): string
     {
-        $d = $this->extractDescription( '#ProductDetail_ProductDetails_div table' );
-        if ( empty( $d ) ) {
-            $d = $this->extractDescription( '#product_description' );
-        }
-        $d .= $this->extractDescription( '#ProductDetail_ProductDetails_div2 table tr td table tr td', true );
-        return StringHelper::isNotEmpty( $d ) ? trim( $d ) : $this->getProduct();
+        return StringHelper::isNotEmpty( $this->desc ) ? $this->desc : $this->getProduct();
     }
 
-    private function extractDescription( $selector, $add_line_break = false ): string 
+    public function getProduct(): string
     {
-        $result = '';
-        if ( $this->exists( $selector ) ) {
-            $result = strip_tags( $this->filter( $selector )->outerHtml(), [ 'p', 'li', 'ul', 'br' ] );
-            $result = StringHelper::cutTagsAttributes($result);
-            $result = preg_replace( '/🖤 \s*Item(.*?)Measurements:(.*?)</uim', '<', $result );
-            $result = preg_replace( '/Item(.*?)Measurements:(.*?)</im', '<', $result );
-            $result = preg_replace( '/❓Questions about fit?(.*?)tashaapparel.com/im', '', $result );
-            $result = preg_replace( '/Questions about fit(.*?)tashaapparel.com/im', '', $result );
-            
-        }
-        if ($result !== '' && $add_line_break) {
-            $result = '<br>' . $result;
-        }
-        return $result;
-    }
-
-    private function extractItemMeasurements( $selector ): array 
-    {
-        $result = '';
-        if ( $this->exists( $selector ) ) {
-            $this->filter( $selector )->each( function ( ParserCrawler $node ) use ( &$result ) {
-                $str = strip_tags( $node->html(), [ 'p', 'li', 'ul', 'br' ] );
-                $re = ["/Item.Measurements:(.*?)<br/im", "/Item.Measurements:(.*?)<\//im"];
-                foreach ( $re as $r ) {
-                    if ( empty( $result ) ) {
-                        preg_match( $r, $str, $matches );
-                        if ( isset( $matches[1] ) ) {
-                            $result = trim( strip_tags( $matches[1] ) );
-                        }        
-                    }
-                }
-            });
-
-        }
-        $attributes = [];
-        preg_match_all( "/(.*?):\s*(\d+)(.*?)(,|$)/i", $result, $matches );
-        if ( count( $matches ) === 5 && count( $matches[1] ) > 0 ) {
-            $len = count( $matches[1] );
-            for ( $i = 0; $i < $len; $i++ ) {
-                $name = trim ( str_replace(",", "", $matches[1][$i] ) );
-                $attributes[ $name ] = trim( $matches[2][$i] ) . '"';
-            }
-        }
-
-        return $attributes;
+        return trim( $this->getAttr( 'meta[property="og:title"]', 'content' ) );
     }
 
     public function getImages(): array
@@ -98,43 +96,17 @@ class Parser extends HtmlParser
     public function getAvail(): ?int
     {
         preg_match( "/Quantity.in.Stock:(\d+)</im", $this->node->html(), $matches );
+
         if ( !isset( $matches[ 1 ] ) ) {
-            return stripos( $this->getAttr( 'meta[ itemprop="availability"]', 'content' ), 'InStock' ) ? self::DEFAULT_AVAIL_NUMBER : 0;
+            return stripos( $this->getAttr( 'meta[ itemprop="availability"]', 'content' ), 'InStock' ) !== false ? self::DEFAULT_AVAIL_NUMBER : 0;
         }
+
         return $matches[ 1 ] ?? self::DEFAULT_AVAIL_NUMBER;
     }
 
     public function getAttributes(): ?array
     {
-        $attributes = [];
-        if ( !$this->exists( '[itemprop="offers"]' ) ) {
-            return null;
-        }
-        $offers = $this->filter( '[itemprop="offers"]' )->html();
-        $valid_names = [ 'Made In', 'Fabric', 'Color', 'Size Ratio', 'Package' ];
-
-        foreach ( explode( '<br>', $offers ) as $o ) {
-            $item = trim( $o );
-            preg_match( "/<b>(.*?):<\/b>(.*)/im", $item, $matches );
-            if ( isset( $matches[ 2 ] ) ) {
-                $name = trim( $matches[ 1 ] );
-                $v = trim( $matches[ 2 ] );
-                if ( in_array( $name, $valid_names ) ) {
-                    $attributes[ $name ] = $v;
-                }
-            }
-        }
-
-        $item_measurements_selectors = [ '#ProductDetail_ProductDetails_div2 table tr td table tr td', '#ProductDetail_ProductDetails_div table tr', '#product_description' ];
-        foreach ( $item_measurements_selectors as $s) {
-            $item_measurements = $this->extractItemMeasurements( $s );
-            if ( count( $item_measurements ) ) {
-                $attributes = array_merge( $attributes, $item_measurements);
-                break;
-            }     
-        }
-
-        return empty( $attributes ) ? null : $attributes;
+        return array_filter( $this->attributes ) ?: null;
     }
 
     public function afterParse( FeedItem $fi ): void
